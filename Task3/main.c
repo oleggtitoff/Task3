@@ -25,13 +25,12 @@ int32_t Mac(int32_t x, int32_t y, int32_t acc);
 void coefsDoubleToFixed32(double *input, int32_t *output);
 void ringInitialization(RingBuff *buff);
 
+FILE *openFile(char *fileName, _Bool mode);	//if 0 - read, if 1 - write
 void readHeader(uint8_t *headerBuff, FILE *inputFilePtr);
 void writeHeader(uint8_t *headerBuff, FILE *outputFilePtr);
 uint32_t defineDataSize(uint8_t *headerBuff);
 int16_t readSample(FILE *inputFilePtr);
 void writeSample(FILE *outputFilePtr, int16_t sample);
-
-FILE * openFile(char *fileName, _Bool mode);	//if 0 - read, if 1 - write
 void closeFile(FILE *filePtr);
 
 int32_t firFilter(RingBuff *ringBuff, int32_t *coefsBuff);
@@ -209,7 +208,7 @@ int32_t	Saturation(int64_t x)
 	{
 		return INT32_MIN;
 	}
-	else if (x >(int64_t)INT32_MAX)
+	else if (x > (int64_t)INT32_MAX)
 	{
 		return INT32_MAX;
 	}
@@ -264,6 +263,38 @@ void ringInitialization(RingBuff *buff)
 	buff->currNum = 0;
 }
 
+FILE *openFile(char *fileName, _Bool mode)		//if 0 - read, if 1 - write
+{
+	FILE * filePtr = NULL;
+	errno_t err;
+
+	if (mode == 0)
+	{
+		err = fopen_s(&filePtr, fileName, "rb");
+	}
+	else
+	{
+		err = fopen_s(&filePtr, fileName, "wb");
+	}
+
+	if (err != 0)
+	{
+		if (mode == 0)
+		{
+			printf("Error opening input file\n");
+		}
+		else
+		{
+			printf("Error opening output file\n");
+		}
+
+		system("pause");
+		exit(0);
+	}
+
+	return filePtr;
+}
+
 void readHeader(uint8_t *headerBuff, FILE *inputFilePtr)
 {
 	if (fread(headerBuff, FILE_HEADER_SIZE, 1, inputFilePtr) != 1)
@@ -314,38 +345,6 @@ void writeSample(FILE *outputFilePtr, int16_t sample)
 		system("pause");
 		exit(0);
 	}
-}
-
-FILE *openFile(char *fileName, _Bool mode)		//if 0 - read, if 1 - write
-{
-	FILE * filePtr = NULL;
-	errno_t err;
-
-	if (mode == 0)
-	{
-		err = fopen_s(&filePtr, fileName, "rb");
-	}
-	else
-	{
-		err = fopen_s(&filePtr, fileName, "wb");
-	}
-
-	if (err != 0)
-	{
-		if (mode == 0)
-		{
-			printf("Error opening input file\n");
-		}
-		else
-		{
-			printf("Error opening output file\n");
-		}
-
-		system("pause");
-		exit(0);
-	}
-
-	return filePtr;
 }
 
 void closeFile(FILE *filePtr)
