@@ -1,10 +1,12 @@
 #include <stdio.h>
 #include <stdint.h>
+#include <stdlib.h>
 
 #define INPUT_FILE_NAME "TestSound1.wav"
 #define OUTPUT_FILE_NAME "Output.wav"
 #define FILE_HEADER_SIZE 44
 #define BYTES_PER_SAMPLE 2
+#define DATA_BUFF_SIZE 10
 #define FRACTIONAL_BITS 31
 #define COEFFICIENTS_SIZE 128
 
@@ -25,13 +27,10 @@ void ringInitialization(RingBuff *buff);
 FILE * openFile(char *fileName, _Bool mode);		//if 0 - read, if 1 - write
 void readHeader(uint8_t *headerBuff, FILE *inputFilePtr);
 void writeHeader(uint8_t *headerBuff, FILE *outputFilePtr);
-uint32_t defineDataSize(uint8_t *headerBuff);
-int16_t readSample(FILE *inputFilePtr);
-void writeSample(FILE *outputFilePtr, int16_t sample);
 void closeFile(FILE *filePtr);
 
 int16_t firFilter(RingBuff *ringBuff, int32_t *coefsBuff);
-void processData(FILE *inputFilePtr, FILE *outputFilePtr, uint32_t dataSize, RingBuff *ringBuff, int32_t *coefsBuff);
+void processData(FILE *inputFilePtr, FILE *outputFilePtr, RingBuff *ringBuff, int32_t *coefsBuff);
 
 
 int main()
@@ -178,11 +177,10 @@ int main()
 
 	readHeader(headerBuff, inputFilePtr);
 	writeHeader(headerBuff, outputFilePtr);
-	processData(inputFilePtr, outputFilePtr, defineDataSize(headerBuff), &samplesBuff, &coefsBuff);
+	processData(inputFilePtr, outputFilePtr, &samplesBuff, coefsBuff);
 	closeFile(inputFilePtr);
 	closeFile(outputFilePtr);
 
-	system("pause");
 	return 0;
 }
 
@@ -274,38 +272,6 @@ void writeHeader(uint8_t *headerBuff, FILE *outputFilePtr)
 	}
 }
 
-uint32_t defineDataSize(uint8_t *headerBuff)
-{
-	return (*(headerBuff + FILE_HEADER_SIZE - 4)) |
-		(*(headerBuff + FILE_HEADER_SIZE - 3) << 8) |
-		(*(headerBuff + FILE_HEADER_SIZE - 2) << 16) |
-		(*(headerBuff + FILE_HEADER_SIZE - 1) << 24);
-}
-
-int16_t readSample(FILE *inputFilePtr)
-{
-	int16_t buff;
-
-	if (fread(&buff, BYTES_PER_SAMPLE, 1, inputFilePtr) != 1)
-	{
-		printf("Error reading input file (data)\n");
-		system("pause");
-		exit(0);
-	}
-
-	return buff;
-}
-
-void writeSample(FILE *outputFilePtr, int16_t sample)
-{
-	if (fwrite(&sample, BYTES_PER_SAMPLE, 1, outputFilePtr) != 1)
-	{
-		printf("Error writing output file (data)\n");
-		system("pause");
-		exit(0);
-	}
-}
-
 void closeFile(FILE *filePtr)
 {
 	fclose(filePtr);
@@ -332,15 +298,27 @@ int16_t firFilter(RingBuff *ringBuff, int32_t *coefsBuff)
 	return (int16_t)((accum + (1LL << 30)) >> 31);
 }
 
-void processData(FILE *inputFilePtr, FILE *outputFilePtr, uint32_t dataSize, RingBuff *ringBuff, int32_t *coefsBuff)
+void processData(FILE *inputFilePtr, FILE *outputFilePtr, RingBuff *ringBuff, int32_t *coefsBuff)
 {
-	uint32_t i;
+	int16_t dataBuff[DATA_BUFF_SIZE];
+	size_t samplesRead;
+	uint16_t i;
 
-	for (i = 0; i < dataSize / BYTES_PER_SAMPLE; i++)
+	while (1)
 	{
-		int16_t sample = readSample(inputFilePtr);
-		*(ringBuff->samples + ringBuff->currNum) = sample;
-		sample = firFilter(ringBuff, coefsBuff);
-		writeSample(outputFilePtr, sample);
+		samplesRead = fread(dataBuff, BYTES_PER_SAMPLE, DATA_BUFF_SIZE, inputFilePtr);
+
+		if (!samplesRead)
+		{
+			break;
+		}
+
+		for (i = 0; i < samplesRead; i++)
+		{
+			*(ringBuff->samples + ringBuff->currNum) = *(dataBuff + i);
+			*(dataBuff + i)	= firFilter(ringBuff, coefsBuff);
+		}
+
+		fwrite(dataBuff, BYTES_PER_SAMPLE, DATA_BUFF_SIZE, outputFilePtr);
 	}
 }
