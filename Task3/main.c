@@ -1,31 +1,28 @@
 #include <stdio.h>
 #include <stdint.h>
-#include <math.h>
-#include <stdlib.h>
 
-#define INPUT_FILE_NAME "Input.wav"
+#define INPUT_FILE_NAME "TestSound1.wav"
 #define OUTPUT_FILE_NAME "Output.wav"
 #define FILE_HEADER_SIZE 44
 #define BYTES_PER_SAMPLE 2
 #define FRACTIONAL_BITS 31
 #define COEFFICIENTS_SIZE 128
 
+#define ACC_Q46_MAX ((1LL << 46) - 1)
+#define ACC_Q46_MIN (-1LL << 46)
+
 
 typedef struct {
-	int8_t currNum;
-	int32_t *samples[COEFFICIENTS_SIZE];
+	uint8_t currNum;
+	int16_t samples[COEFFICIENTS_SIZE];
 } RingBuff;
 
 
 int32_t doubleToFixed32(double x);
-int32_t Add(int32_t x, int32_t y);
-int32_t Mul(int32_t x, int32_t y);
-int32_t Mac(int32_t x, int32_t y, int32_t acc);
-
 void coefsDoubleToFixed32(double *input, int32_t *output);
 void ringInitialization(RingBuff *buff);
 
-FILE *openFile(char *fileName, _Bool mode);	//if 0 - read, if 1 - write
+FILE * openFile(char *fileName, _Bool mode);		//if 0 - read, if 1 - write
 void readHeader(uint8_t *headerBuff, FILE *inputFilePtr);
 void writeHeader(uint8_t *headerBuff, FILE *outputFilePtr);
 uint32_t defineDataSize(uint8_t *headerBuff);
@@ -33,7 +30,7 @@ int16_t readSample(FILE *inputFilePtr);
 void writeSample(FILE *outputFilePtr, int16_t sample);
 void closeFile(FILE *filePtr);
 
-int32_t firFilter(RingBuff *ringBuff, int32_t *coefsBuff);
+int16_t firFilter(RingBuff *ringBuff, int32_t *coefsBuff);
 void processData(FILE *inputFilePtr, FILE *outputFilePtr, uint32_t dataSize, RingBuff *ringBuff, int32_t *coefsBuff);
 
 
@@ -41,6 +38,7 @@ int main()
 {
 	FILE *inputFilePtr = openFile(INPUT_FILE_NAME, 0);
 	FILE *outputFilePtr = openFile(OUTPUT_FILE_NAME, 1);
+
 	uint8_t headerBuff[FILE_HEADER_SIZE];
 	double coefsDoubleBuff[COEFFICIENTS_SIZE] = {
 		-0.000162164358122296535080070212231362348,
@@ -202,48 +200,9 @@ int32_t doubleToFixed32(double x)
 	return (int32_t)(x * (double)(1LL << FRACTIONAL_BITS));
 }
 
-int32_t	Saturation(int64_t x)
-{
-	if (x < (int64_t)INT32_MIN)
-	{
-		return INT32_MIN;
-	}
-	else if (x > (int64_t)INT32_MAX)
-	{
-		return INT32_MAX;
-	}
-
-	return (int32_t)x;
-}
-
-int32_t roundFixed64To32(int64_t x)
-{
-	return (int32_t)((x + (1LL << 31) >> 32));
-}
-
-int32_t Add(int32_t x, int32_t y)
-{
-	return Saturation((int64_t)x + y);
-}
-
-int32_t Mul(int32_t x, int32_t y)
-{
-	if (x == INT32_MIN && y == INT32_MIN)
-	{
-		return INT32_MAX;
-	}
-
-	return roundFixed64To32(((int64_t)x * y) << 1);
-}
-
-int32_t Mac(int32_t x, int32_t y, int32_t acc)
-{
-	return Add(Mul(x, y), acc);
-}
-
 void coefsDoubleToFixed32(double *input, int32_t *output)
 {
-	int i;
+	int16_t i;
 
 	for (i = 0; i < COEFFICIENTS_SIZE; i++)
 	{
@@ -263,7 +222,7 @@ void ringInitialization(RingBuff *buff)
 	buff->currNum = 0;
 }
 
-FILE *openFile(char *fileName, _Bool mode)		//if 0 - read, if 1 - write
+FILE * openFile(char *fileName, _Bool mode)		//if 0 - read, if 1 - write
 {
 	FILE * filePtr = NULL;
 	errno_t err;
@@ -352,19 +311,25 @@ void closeFile(FILE *filePtr)
 	fclose(filePtr);
 }
 
-int32_t firFilter(RingBuff *ringBuff, int32_t *coefsBuff)
+int16_t firFilter(RingBuff *ringBuff, int32_t *coefsBuff)
 {
+	uint8_t index;
 	int16_t i;
-	int32_t accum = 0;
-
+	int16_t sample;
+	int32_t coeficient;
+	int64_t accum = 0;
+	
 	for (i = 0; i < COEFFICIENTS_SIZE; i++)
 	{
-		accum = Mac(*(ringBuff->samples + ((ringBuff->currNum - i) & (COEFFICIENTS_SIZE - 1))),
-			*(coefsBuff + i), accum);
+		index = ((ringBuff->currNum - i) & (COEFFICIENTS_SIZE - 1));
+		sample = *(ringBuff->samples + index);
+		coeficient = *(coefsBuff + i);
+		accum += (int64_t)sample * coeficient;
 	}
 
-	ringBuff->currNum = (ringBuff->currNum++) & (COEFFICIENTS_SIZE - 1);
-	return accum;
+	ringBuff->currNum = ++ringBuff->currNum & (COEFFICIENTS_SIZE - 1);
+
+	return (int16_t)((accum + (1LL << 30)) >> 31);
 }
 
 void processData(FILE *inputFilePtr, FILE *outputFilePtr, uint32_t dataSize, RingBuff *ringBuff, int32_t *coefsBuff)
@@ -373,9 +338,9 @@ void processData(FILE *inputFilePtr, FILE *outputFilePtr, uint32_t dataSize, Rin
 
 	for (i = 0; i < dataSize / BYTES_PER_SAMPLE; i++)
 	{
-		int32_t sample = (int32_t)readSample(inputFilePtr) << 16;
+		int16_t sample = readSample(inputFilePtr);
 		*(ringBuff->samples + ringBuff->currNum) = sample;
 		sample = firFilter(ringBuff, coefsBuff);
-		writeSample(outputFilePtr, (int16_t)(sample >> 16)); //TODO: round sample
+		writeSample(outputFilePtr, sample);
 	}
 }
