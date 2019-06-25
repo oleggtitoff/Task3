@@ -1,3 +1,5 @@
+#define _CRT_SECURE_NO_WARNINGS
+
 #include <stdio.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -27,7 +29,6 @@ void ringInitialization(RingBuff *buff);
 FILE * openFile(char *fileName, _Bool mode);		//if 0 - read, if 1 - write
 void readHeader(uint8_t *headerBuff, FILE *inputFilePtr);
 void writeHeader(uint8_t *headerBuff, FILE *outputFilePtr);
-void closeFile(FILE *filePtr);
 
 int16_t firFilter(RingBuff *ringBuff, int32_t *coefsBuff);
 void processData(FILE *inputFilePtr, FILE *outputFilePtr, RingBuff *ringBuff, int32_t *coefsBuff);
@@ -178,8 +179,8 @@ int main()
 	readHeader(headerBuff, inputFilePtr);
 	writeHeader(headerBuff, outputFilePtr);
 	processData(inputFilePtr, outputFilePtr, &samplesBuff, coefsBuff);
-	closeFile(inputFilePtr);
-	closeFile(outputFilePtr);
+	fclose(inputFilePtr);
+	fclose(outputFilePtr);
 
 	return 0;
 }
@@ -204,7 +205,7 @@ void coefsDoubleToFixed32(double *input, int32_t *output)
 
 	for (i = 0; i < COEFFICIENTS_SIZE; i++)
 	{
-		*(output + i) = doubleToFixed32(*(input + i));
+		output[i] = doubleToFixed32(input[i]);
 	}
 }
 
@@ -214,7 +215,7 @@ void ringInitialization(RingBuff *buff)
 
 	for (i = 0; i < COEFFICIENTS_SIZE; i++)
 	{
-		*(buff->samples + i) = 0;
+		buff->samples[i] = 0;
 	}
 
 	buff->currNum = 0;
@@ -222,31 +223,25 @@ void ringInitialization(RingBuff *buff)
 
 FILE * openFile(char *fileName, _Bool mode)		//if 0 - read, if 1 - write
 {
-	FILE * filePtr = NULL;
-	errno_t err;
+	FILE *filePtr;
 
 	if (mode == 0)
 	{
-		err = fopen_s(&filePtr, fileName, "rb");
+		if ((filePtr = fopen(fileName, "rb")) == NULL)
+		{
+			printf("Error opening input file\n");
+			system("pause");
+			exit(0);
+		}
 	}
 	else
 	{
-		err = fopen_s(&filePtr, fileName, "wb");
-	}
-
-	if (err != 0)
-	{
-		if (mode == 0)
-		{
-			printf("Error opening input file\n");
-		}
-		else
+		if ((filePtr = fopen(fileName, "wb")) == NULL)
 		{
 			printf("Error opening output file\n");
+			system("pause");
+			exit(0);
 		}
-
-		system("pause");
-		exit(0);
 	}
 
 	return filePtr;
@@ -272,11 +267,6 @@ void writeHeader(uint8_t *headerBuff, FILE *outputFilePtr)
 	}
 }
 
-void closeFile(FILE *filePtr)
-{
-	fclose(filePtr);
-}
-
 int16_t firFilter(RingBuff *ringBuff, int32_t *coefsBuff)
 {
 	uint8_t index;
@@ -288,12 +278,12 @@ int16_t firFilter(RingBuff *ringBuff, int32_t *coefsBuff)
 	for (i = 0; i < COEFFICIENTS_SIZE; i++)
 	{
 		index = ((ringBuff->currNum - i) & (COEFFICIENTS_SIZE - 1));
-		sample = *(ringBuff->samples + index);
-		coeficient = *(coefsBuff + i);
+		sample = ringBuff->samples[index];
+		coeficient = coefsBuff[i];
 		accum += (int64_t)sample * coeficient;
 	}
 
-	ringBuff->currNum = ++ringBuff->currNum & (COEFFICIENTS_SIZE - 1);
+	ringBuff->currNum = (ringBuff->currNum + 1) & (COEFFICIENTS_SIZE - 1);
 
 	return (int16_t)((accum + (1LL << 30)) >> 31);
 }
@@ -315,8 +305,8 @@ void processData(FILE *inputFilePtr, FILE *outputFilePtr, RingBuff *ringBuff, in
 
 		for (i = 0; i < samplesRead; i++)
 		{
-			*(ringBuff->samples + ringBuff->currNum) = *(dataBuff + i);
-			*(dataBuff + i)	= firFilter(ringBuff, coefsBuff);
+			ringBuff->samples[ringBuff->currNum] = dataBuff[i];
+			dataBuff[i]	= firFilter(ringBuff, coefsBuff);
 		}
 
 		fwrite(dataBuff, BYTES_PER_SAMPLE, samplesRead, outputFilePtr);
