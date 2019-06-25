@@ -2,11 +2,11 @@
 #include <stdint.h>
 #include <stdlib.h>
 
-#define INPUT_FILE_NAME "TestSound1.wav"
+#define INPUT_FILE_NAME "TestSound2.wav"
 #define OUTPUT_FILE_NAME "Output.wav"
 #define FILE_HEADER_SIZE 44
 #define BYTES_PER_SAMPLE 2
-#define DATA_BUFF_SIZE 10
+#define DATA_BUFF_SIZE 100
 #define FRACTIONAL_BITS 31
 #define COEFFICIENTS_SIZE 128
 
