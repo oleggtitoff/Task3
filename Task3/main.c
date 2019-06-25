@@ -319,6 +319,6 @@ void processData(FILE *inputFilePtr, FILE *outputFilePtr, RingBuff *ringBuff, in
 			*(dataBuff + i)	= firFilter(ringBuff, coefsBuff);
 		}
 
-		fwrite(dataBuff, BYTES_PER_SAMPLE, DATA_BUFF_SIZE, outputFilePtr);
+		fwrite(dataBuff, BYTES_PER_SAMPLE, samplesRead, outputFilePtr);
 	}
 }
