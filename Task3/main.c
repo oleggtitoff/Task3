@@ -23,6 +23,7 @@ typedef struct {
 
 
 int32_t doubleToFixed32(double x);
+void correctCoefficients(double *coeficients);
 void coefsDoubleToFixed32(double *input, int32_t *output);
 void ringInitialization(RingBuff *buff);
 
@@ -173,6 +174,7 @@ int main()
 	int32_t coefsBuff[COEFFICIENTS_SIZE];
 	RingBuff samplesBuff;
 
+	correctCoefficients(coefsDoubleBuff);
 	coefsDoubleToFixed32(coefsDoubleBuff, coefsBuff);
 	ringInitialization(&samplesBuff);
 
@@ -197,6 +199,25 @@ int32_t doubleToFixed32(double x)
 	}
 
 	return (int32_t)(x * (double)(1LL << FRACTIONAL_BITS));
+}
+
+void correctCoefficients(double *coeficients)
+{
+	uint16_t i;
+	double sum = 0;
+
+	for (i = 0; i < COEFFICIENTS_SIZE; i++)
+	{
+		sum += coeficients[i];
+	}
+
+	if (sum != 1)
+	{
+		for (i = 0; i < COEFFICIENTS_SIZE; i++)
+		{
+			coeficients[i] *= (2 - sum);
+		}
+	}
 }
 
 void coefsDoubleToFixed32(double *input, int32_t *output)
