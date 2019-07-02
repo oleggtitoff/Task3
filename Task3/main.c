@@ -32,7 +32,7 @@ void readHeader(uint8_t *headerBuff, FILE *inputFilePtr);
 void writeHeader(uint8_t *headerBuff, FILE *outputFilePtr);
 
 int16_t firFilter(RingBuff *ringBuff, int32_t *coefsBuff);
-void processData(FILE *inputFilePtr, FILE *outputFilePtr, RingBuff *ringBuff, int32_t *coefsBuff);
+void run(FILE *inputFilePtr, FILE *outputFilePtr, RingBuff *ringBuff, int32_t *coefsBuff);
 
 
 int main()
@@ -180,7 +180,7 @@ int main()
 
 	readHeader(headerBuff, inputFilePtr);
 	writeHeader(headerBuff, outputFilePtr);
-	processData(inputFilePtr, outputFilePtr, &samplesBuff, coefsBuff);
+	run(inputFilePtr, outputFilePtr, &samplesBuff, coefsBuff);
 	fclose(inputFilePtr);
 	fclose(outputFilePtr);
 
@@ -309,7 +309,7 @@ int16_t firFilter(RingBuff *ringBuff, int32_t *coefsBuff)
 	return (int16_t)((accum + (1LL << 30)) >> 31);
 }
 
-void processData(FILE *inputFilePtr, FILE *outputFilePtr, RingBuff *ringBuff, int32_t *coefsBuff)
+void run(FILE *inputFilePtr, FILE *outputFilePtr, RingBuff *ringBuff, int32_t *coefsBuff)
 {
 	int16_t dataBuff[DATA_BUFF_SIZE];
 	size_t samplesRead;
